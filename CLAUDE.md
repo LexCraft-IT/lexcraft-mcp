@@ -1,6 +1,40 @@
-# MCP server — apps/mcp
+# MCP server — lexcraft-mcp
 
-Loaded when Claude works in this folder; the root `CLAUDE.md` holds the repository-wide rules.
+This repository's root: the MCP server of LexCraft, pinned by lexcraft-core as its submodule
+`apps/mcp` (G-603). Paths below written `apps/server/…` or `services/…` are lexcraft-core's.
+
+## `conventions/` is a submodule: lexcraft-contracts
+
+The convention for legal sources and the contract the core, the web and the MCP server each assert
+(`conventions/sources/README.md`, `conventions/contract/README.md`). It is read, never edited, here:
+a change is a pull request in LexCraft-IT/lexcraft-contracts first, then the core moves its
+submodule and fixes its side, then this repository moves its own (`git -C conventions fetch && git
+-C conventions checkout <commit>`, committed as one change). Clone with `--recurse-submodules`, or
+run `git submodule update --init --recursive`; a test that cannot find `conventions/` fails, it never
+skips. The job «Contract» of CI warns when the submodule is behind lexcraft-contracts' `develop`.
+
+## Git flow (as in lexcraft-core, `docs/git-workflow.md` there)
+
+- `develop` is where work lands and the default branch; `main` is the released version.
+- Branch from `develop` (`feat/`, `fix/`, `refactor/`, `chore/`, `docs/`), open a pull request into
+  `develop`, merge it with a merge commit titled `merge: <branch> — <what changes>` once CI is green.
+- Review is requested, never awaited (`.github/CODEOWNERS`).
+- The ruleset refuses pushes to `main` and `develop` and any merge whose CI is not green; the shared
+  hook (`.claude/settings.json`) refuses commits on them.
+- A release is a pull request `develop → main`, then a tag `vX.Y.Z` on `main`. This repository has its
+  own version (`version.txt`, G-597): the product's version is the core's, which pins this repository
+  at one of its tags.
+
+## Rules
+
+- **Public repository.** Nothing private enters it: no notes from the owners' workspaces, no
+  infrastructure addresses, no personal paths or names, no secrets. `.env` files are never committed
+  and Claude does not read them.
+- English for code, comments, commits and documentation; the people who develop here are lawyers
+  first: say plainly when a change carries an architectural or security risk.
+
+## The server
+
 Specs: `docs/superpowers/specs/2026-10-02-mcp-spike-design.md` (phase 1) and
 `docs/superpowers/specs/2026-10-04-mcp-second-round-design.md` (notes,
 sessions, deletion into the trash, cards); plans beside them in

@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+
+  mcp:
+    name: MCP server build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # tests/sourcesGolden.test.ts reads conventions/, the submodule lexcraft-contracts.
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # Against stub servers: no database, no other service.
+      - run: npm test
+
+  # conventions/ is the submodule lexcraft-contracts: present, at a commit of its develop. Behind its
+  # develop is a warning (the core's release is where the commits must agree); off its history fails.
+  contract:
+    name: Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: The contract's submodule
+        run: |
+          test -f conventions/sources/golden.json || { echo "conventions/ is empty: the submodule was not checked out"; exit 1; }
+          pinned="$(git rev-parse HEAD:conventions)"
+          git -C conventions fetch -q origin develop
+          tip="$(git -C conventions rev-parse FETCH_HEAD)"
+          echo "conventions at $pinned; lexcraft-contracts develop at $tip"
+          [ "$pinned" = "$tip" ] && exit 0
+          git -C conventions fetch -q --unshallow origin develop 2>/dev/null || git -C conventions fetch -q --depth=10000 origin develop
+          if git -C conventions merge-base --is-ancestor "$pinned" FETCH_HEAD; then
+            echo "::warning title=Contract::conventions is behind lexcraft-contracts develop; move it when you take its change"
+          else
+            echo "::error title=Contract::conventions points to a commit that is not on lexcraft-contracts develop"
+            exit 1
+          fi
+
+  tooling:
+    name: Repository tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # A directory argument fails on Node 26: the glob names the test files.
+      - run: node --test '.claude/hooks/*.test.mjs'
+      - run: sh scripts/ci/tests/test_checks.sh
+      - run: sh scripts/tests/test_release_notes.sh
+
+  release-source:
+    name: Release source
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Through env, never inline: a branch name is attacker-controlled text.
+      - run: sh scripts/ci/check_release_source.sh "$HEAD_REF"
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+
+  main-in-develop:
+    name: main inside develop
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'pull_request' && github.base_ref == 'develop')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: sh scripts/ci/check_main_in_develop.sh origin/main HEAD
